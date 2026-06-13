@@ -4,12 +4,17 @@ const nodemailer = require('nodemailer');
 const { createUser, findUserByEmail, saveOTP, verifyUserOTP, markUserVerified } = require('../models/userModel');
 const { generateOTP, getOTPExpiry } = require('../utils/generateOTP');
 
-// ─── Email Transporter (Brevo SMTP) ──────────────────────────────────────────
-await transporter.sendMail({
-  from: process.env.EMAIL_FROM,
-  to: email,
-  subject: 'LegalConnect - Verify Your Email'
+// ─── Email Transporter ────────────────────────────────────────────────────────
+const transporter = nodemailer.createTransport({
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
 });
+
 // ─── Register ─────────────────────────────────────────────────────────────────
 const register = async (req, res) => {
   try {
@@ -30,7 +35,7 @@ const register = async (req, res) => {
     await saveOTP(email, otp, expiresAt);
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: process.env.EMAIL_FROM,
       to: email,
       subject: 'LegalConnect - Verify Your Email',
       html: `
