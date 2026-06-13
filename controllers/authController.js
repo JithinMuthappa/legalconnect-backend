@@ -1,7 +1,19 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 const { createUser, findUserByEmail, saveOTP, verifyUserOTP, markUserVerified } = require('../models/userModel');
 const { generateOTP, getOTPExpiry } = require('../utils/generateOTP');
+
+// ─── Email Transporter (Brevo SMTP) ──────────────────────────────────────────
+const transporter = nodemailer.createTransport({
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 // ─── Register ─────────────────────────────────────────────────────────────────
 const register = async (req, res) => {
@@ -18,13 +30,27 @@ const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await createUser(email, hashedPassword, role);
 
-    // Generate OTP
     const otp = generateOTP();
     const expiresAt = getOTPExpiry();
     await saveOTP(email, otp, expiresAt);
 
-    // DEV MODE: Print OTP in terminal instead of email
-    console.log(`🔐 OTP for ${email}: ${otp}`);
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'LegalConnect - Verify Your Email',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 30px; background: #1A1A2E; color: white; border-radius: 10px;">
+          <h1 style="color: #D4AF37; text-align: center;">⚖️ LegalConnect</h1>
+          <h2 style="color: white;">Verify Your Email</h2>
+          <p style="color: #B0B0C0;">Your OTP verification code is:</p>
+          <div style="background: #252540; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+            <h1 style="color: #D4AF37; letter-spacing: 10px; font-size: 36px;">${otp}</h1>
+          </div>
+          <p style="color: #B0B0C0;">This OTP is valid for <strong>10 minutes</strong>.</p>
+          <p style="color: #B0B0C0;">If you did not register, please ignore this email.</p>
+        </div>
+      `,
+    });
 
     res.status(201).json({
       success: true,
