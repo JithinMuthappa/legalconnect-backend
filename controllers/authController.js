@@ -5,16 +5,11 @@ const { createUser, findUserByEmail, saveOTP, verifyUserOTP, markUserVerified } 
 const { generateOTP, getOTPExpiry } = require('../utils/generateOTP');
 
 // ─── Email Transporter (Brevo SMTP) ──────────────────────────────────────────
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
+await transporter.sendMail({
+  from: process.env.EMAIL_FROM,
+  to: email,
+  subject: 'LegalConnect - Verify Your Email'
 });
-
 // ─── Register ─────────────────────────────────────────────────────────────────
 const register = async (req, res) => {
   try {
