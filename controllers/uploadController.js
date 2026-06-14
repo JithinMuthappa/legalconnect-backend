@@ -2,21 +2,26 @@ const pool = require('../config/db');
 
 const uploadProfileImage = async (req, res) => {
   try {
-    if (!req.file)
-      return res.status(400).json({ success: false, message: 'No image file uploaded' });
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No image file uploaded' 
+      });
+    }
 
-    const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    // Convert image to base64
+    const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
 
     // Update advocate profile image in database
     await pool.query(
       `UPDATE advocates SET profile_image = $1 WHERE user_id = $2`,
-      [imageUrl, req.user.id]
+      [base64Image, req.user.id]
     );
 
     res.json({
       success: true,
       message: 'Profile image uploaded successfully!',
-      imageUrl,
+      imageUrl: base64Image,
     });
 
   } catch (error) {
