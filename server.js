@@ -26,6 +26,7 @@ app.use('/api/chat',         require('./routes/chatRoutes'));
 app.use('/api/achievements', require('./routes/achievementRoutes'));
 app.use('/api/client',       require('./routes/clientDashboardRoutes'));
 app.use('/api/upload',       require('./routes/uploadRoutes'));
+app.use('/api/messages', require('./routes/messageRoutes'));
 
 // Health Check
 app.get('/', (req, res) => {
