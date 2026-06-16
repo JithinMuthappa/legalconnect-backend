@@ -11,7 +11,7 @@ const sendMessage = async (senderId, receiverId, content) => {
 
 const getConversation = async (userId1, userId2) => {
   const result = await pool.query(
-    `SELECT messages.*, 
+    `SELECT messages.*,
      sender.email as sender_email,
      receiver.email as receiver_email
      FROM messages
@@ -78,10 +78,20 @@ const getUnreadCount = async (userId) => {
   return parseInt(result.rows[0].count);
 };
 
+const deleteConversation = async (userId1, userId2) => {
+  await pool.query(
+    `DELETE FROM messages
+     WHERE (sender_id = $1 AND receiver_id = $2)
+     OR (sender_id = $2 AND receiver_id = $1)`,
+    [userId1, userId2]
+  );
+};
+
 module.exports = {
   sendMessage,
   getConversation,
   getInbox,
   markAsRead,
   getUnreadCount,
+  deleteConversation,
 };

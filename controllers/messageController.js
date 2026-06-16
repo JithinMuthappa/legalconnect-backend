@@ -4,6 +4,7 @@ const {
   getInbox,
   markAsRead,
   getUnreadCount,
+  deleteConversation,
 } = require('../models/messageModel');
 
 const send = async (req, res) => {
@@ -12,7 +13,10 @@ const send = async (req, res) => {
     const sender_id = req.user.id;
 
     if (!receiver_id || !content)
-      return res.status(400).json({ success: false, message: 'Receiver and content are required' });
+      return res.status(400).json({
+        success: false,
+        message: 'Receiver and content are required',
+      });
 
     const message = await sendMessage(sender_id, receiver_id, content);
     res.status(201).json({ success: true, message });
@@ -60,4 +64,17 @@ const unreadCount = async (req, res) => {
   }
 };
 
-module.exports = { send, conversation, inbox, unreadCount };
+const deleteChat = async (req, res) => {
+  try {
+    const userId1 = req.user.id;
+    const userId2 = parseInt(req.params.userId);
+    await deleteConversation(userId1, userId2);
+    res.json({ success: true, message: 'Conversation deleted!' });
+
+  } catch (error) {
+    console.error('Delete chat error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to delete' });
+  }
+};
+
+module.exports = { send, conversation, inbox, unreadCount, deleteChat };
