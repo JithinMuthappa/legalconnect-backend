@@ -17,8 +17,8 @@ const getConversation = async (userId1, userId2) => {
      FROM messages
      JOIN users sender ON messages.sender_id = sender.id
      JOIN users receiver ON messages.receiver_id = receiver.id
-     WHERE (sender_id = $1 AND receiver_id = $2)
-     OR (sender_id = $2 AND receiver_id = $1)
+     WHERE (sender_id = $1 AND receiver_id = $2 AND deleted_by_sender = FALSE)
+     OR (sender_id = $2 AND receiver_id = $1 AND deleted_by_receiver = FALSE)
      ORDER BY created_at ASC`,
     [userId1, userId2]
   );
@@ -51,7 +51,8 @@ const getInbox = async (userId) => {
        UNION
        SELECT user_id, full_name, profile_image FROM advocates
      ) rp ON rp.user_id = messages.receiver_id
-     WHERE sender_id = $1 OR receiver_id = $1
+     WHERE (sender_id = $1 AND deleted_by_sender = FALSE)
+     OR (receiver_id = $1 AND deleted_by_receiver = FALSE)
      ORDER BY
        LEAST(sender_id, receiver_id),
        GREATEST(sender_id, receiver_id),
@@ -72,18 +73,29 @@ const markAsRead = async (senderId, receiverId) => {
 const getUnreadCount = async (userId) => {
   const result = await pool.query(
     `SELECT COUNT(*) FROM messages
-     WHERE receiver_id = $1 AND is_read = FALSE`,
+     WHERE receiver_id = $1 
+     AND is_read = FALSE
+     AND deleted_by_receiver = FALSE`,
     [userId]
   );
   return parseInt(result.rows[0].count);
 };
 
-const deleteConversation = async (userId1, userId2) => {
+const deleteConversation = async (requestingUserId, otherUserId) => {
+  // Mark as deleted for sender's view
   await pool.query(
-    `DELETE FROM messages
-     WHERE (sender_id = $1 AND receiver_id = $2)
-     OR (sender_id = $2 AND receiver_id = $1)`,
-    [userId1, userId2]
+    `UPDATE messages 
+     SET deleted_by_sender = TRUE
+     WHERE sender_id = $1 AND receiver_id = $2`,
+    [requestingUserId, otherUserId]
+  );
+
+  // Mark as deleted for receiver's view
+  await pool.query(
+    `UPDATE messages 
+     SET deleted_by_receiver = TRUE
+     WHERE sender_id = $2 AND receiver_id = $1`,
+    [requestingUserId, otherUserId]
   );
 };
 
