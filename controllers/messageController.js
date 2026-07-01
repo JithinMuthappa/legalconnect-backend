@@ -82,7 +82,8 @@ const deleteSingleMessage = async (req, res) => {
   try {
     const userId = req.user.id;
     const messageId = parseInt(req.params.messageId);
-    await deleteMessage(messageId, userId);
+    const deleteForEveryone = req.body.deleteForEveryone === true;
+    await deleteMessage(messageId, userId, deleteForEveryone);
     res.json({ success: true, message: 'Message deleted!' });
 
   } catch (error) {

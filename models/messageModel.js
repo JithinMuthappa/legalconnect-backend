@@ -97,7 +97,7 @@ const deleteConversation = async (requestingUserId, otherUserId) => {
   );
 };
 
-const deleteMessage = async (messageId, userId) => {
+const deleteMessage = async (messageId, userId, deleteForEveryone) => {
   const msg = await pool.query(
     `SELECT * FROM messages WHERE id = $1`,
     [messageId]
@@ -107,7 +107,16 @@ const deleteMessage = async (messageId, userId) => {
 
   const message = msg.rows[0];
 
-  if (message.sender_id === userId) {
+  if (deleteForEveryone && message.sender_id === userId) {
+    // Delete for everyone — mark as deleted and update content
+    await pool.query(
+      `UPDATE messages
+       SET is_deleted_for_everyone = TRUE,
+           content = 'This message was deleted'
+       WHERE id = $1`,
+      [messageId]
+    );
+  } else if (message.sender_id === userId) {
     await pool.query(
       `UPDATE messages SET deleted_by_sender = TRUE WHERE id = $1`,
       [messageId]
