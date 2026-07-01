@@ -73,7 +73,7 @@ const markAsRead = async (senderId, receiverId) => {
 const getUnreadCount = async (userId) => {
   const result = await pool.query(
     `SELECT COUNT(*) FROM messages
-     WHERE receiver_id = $1 
+     WHERE receiver_id = $1
      AND is_read = FALSE
      AND deleted_by_receiver = FALSE`,
     [userId]
@@ -82,21 +82,44 @@ const getUnreadCount = async (userId) => {
 };
 
 const deleteConversation = async (requestingUserId, otherUserId) => {
-  // Mark as deleted for sender's view
   await pool.query(
-    `UPDATE messages 
+    `UPDATE messages
      SET deleted_by_sender = TRUE
      WHERE sender_id = $1 AND receiver_id = $2`,
     [requestingUserId, otherUserId]
   );
 
-  // Mark as deleted for receiver's view
   await pool.query(
-    `UPDATE messages 
+    `UPDATE messages
      SET deleted_by_receiver = TRUE
      WHERE sender_id = $2 AND receiver_id = $1`,
     [requestingUserId, otherUserId]
   );
+};
+
+const deleteMessage = async (messageId, userId) => {
+  const msg = await pool.query(
+    `SELECT * FROM messages WHERE id = $1`,
+    [messageId]
+  );
+
+  if (msg.rows.length === 0) return false;
+
+  const message = msg.rows[0];
+
+  if (message.sender_id === userId) {
+    await pool.query(
+      `UPDATE messages SET deleted_by_sender = TRUE WHERE id = $1`,
+      [messageId]
+    );
+  } else if (message.receiver_id === userId) {
+    await pool.query(
+      `UPDATE messages SET deleted_by_receiver = TRUE WHERE id = $1`,
+      [messageId]
+    );
+  }
+
+  return true;
 };
 
 module.exports = {
@@ -106,4 +129,5 @@ module.exports = {
   markAsRead,
   getUnreadCount,
   deleteConversation,
+  deleteMessage,
 };

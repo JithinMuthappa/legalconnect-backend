@@ -5,6 +5,7 @@ const {
   markAsRead,
   getUnreadCount,
   deleteConversation,
+  deleteMessage,
 } = require('../models/messageModel');
 
 const send = async (req, res) => {
@@ -77,4 +78,24 @@ const deleteChat = async (req, res) => {
   }
 };
 
-module.exports = { send, conversation, inbox, unreadCount, deleteChat };
+const deleteSingleMessage = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const messageId = parseInt(req.params.messageId);
+    await deleteMessage(messageId, userId);
+    res.json({ success: true, message: 'Message deleted!' });
+
+  } catch (error) {
+    console.error('Delete message error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to delete' });
+  }
+};
+
+module.exports = {
+  send,
+  conversation,
+  inbox,
+  unreadCount,
+  deleteChat,
+  deleteSingleMessage,
+};
