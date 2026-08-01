@@ -7,9 +7,9 @@ const { generateOTP, getOTPExpiry } = require('../utils/generateOTP');
 
 // ─── Email Transporter ────────────────────────────────────────────────────────
 const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
+  host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
+  port: Number(process.env.EMAIL_PORT || 587),
+  secure: process.env.EMAIL_SECURE === 'true',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -18,6 +18,10 @@ const transporter = nodemailer.createTransport({
 
 // ─── Send OTP Email ───────────────────────────────────────────────────────────
 const sendOTPEmail = async (email, otp) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.EMAIL_FROM) {
+    throw new Error('Email service is not configured');
+  }
+
   await transporter.sendMail({
     from: `"LegalConnect" <${process.env.EMAIL_FROM}>`,
     to: email,
@@ -130,16 +134,22 @@ const resendOTP = async (req, res) => {
     if (!user)
       return res.status(400).json({ success: false, message: 'Email not found' });
 
+    if (user.is_verified)
+      return res.status(400).json({ success: false, message: 'Email is already verified' });
+
     const otp = generateOTP();
     const expiresAt = getOTPExpiry();
-    await saveOTP(email, otp, expiresAt);
 
     try {
       await sendOTPEmail(email, otp);
+      await saveOTP(email, otp, expiresAt);
       console.log(`✅ OTP resent to ${email}`);
     } catch (emailError) {
       console.error('Resend email failed:', emailError.message);
-      console.log(`🔐 OTP for ${email}: ${otp}`);
+      return res.status(502).json({
+        success: false,
+        message: 'Unable to send OTP email. Please try again later.',
+      });
     }
 
     res.json({ success: true, message: 'OTP resent successfully!' });
