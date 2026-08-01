@@ -21,15 +21,12 @@ const transporter = nodemailer.createTransport({
 
 // ─── Send OTP Email ───────────────────────────────────────────────────────────
 const sendOTPEmail = async (email, otp) => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.EMAIL_FROM) {
+  if (!process.env.EMAIL_FROM) {
     throw new Error('Email service is not configured');
   }
 
-  await transporter.sendMail({
-    from: `"LegalConnect" <${process.env.EMAIL_FROM}>`,
-    to: email,
-    subject: 'LegalConnect - Verify Your Email',
-    html: `
+  const subject = 'LegalConnect - Verify Your Email';
+  const html = `
       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 30px; background: #1A1A2E; color: white; border-radius: 10px;">
         <h1 style="color: #D4AF37; text-align: center;">⚖️ LegalConnect</h1>
         <h2 style="color: white;">Verify Your Email</h2>
@@ -40,7 +37,39 @@ const sendOTPEmail = async (email, otp) => {
         <p style="color: #B0B0C0;">This OTP is valid for <strong>10 minutes</strong>.</p>
         <p style="color: #B0B0C0;">If you did not register, please ignore this email.</p>
       </div>
-    `,
+    `;
+
+  // The HTTPS API uses port 443, which is more reliable than SMTP from cloud hosts.
+  if (process.env.BREVO_API_KEY) {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': process.env.BREVO_API_KEY,
+      },
+      body: JSON.stringify({
+        sender: { name: 'LegalConnect', email: process.env.EMAIL_FROM },
+        to: [{ email }],
+        subject,
+        htmlContent: html,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Brevo API request failed (${response.status}): ${await response.text()}`);
+    }
+    return;
+  }
+
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error('Email service is not configured');
+  }
+
+  await transporter.sendMail({
+    from: `"LegalConnect" <${process.env.EMAIL_FROM}>`,
+    to: email,
+    subject,
+    html,
   });
 };
 
