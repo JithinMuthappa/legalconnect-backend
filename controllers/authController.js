@@ -10,6 +10,9 @@ const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
   port: Number(process.env.EMAIL_PORT || 587),
   secure: process.env.EMAIL_SECURE === 'true',
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 20000,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -50,8 +53,30 @@ const register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'All fields are required' });
 
     const existingUser = await findUserByEmail(email);
-    if (existingUser)
+    if (existingUser && existingUser.is_verified)
       return res.status(400).json({ success: false, message: 'Email already registered' });
+
+    if (existingUser) {
+      const otp = generateOTP();
+      const expiresAt = getOTPExpiry();
+
+      try {
+        await sendOTPEmail(email, otp);
+        await saveOTP(email, otp, expiresAt);
+        return res.json({
+          success: true,
+          message: 'A new OTP has been sent to your email.',
+          requiresOTP: true,
+          role: existingUser.role,
+        });
+      } catch (emailError) {
+        console.error('Pending registration email failed:', emailError.message);
+        return res.status(502).json({
+          success: false,
+          message: 'Unable to send OTP email. Please verify the email service configuration and try again.',
+        });
+      }
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await createUser(email, hashedPassword, role);
