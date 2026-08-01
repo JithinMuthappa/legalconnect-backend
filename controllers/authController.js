@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const pool = require('../config/db');
 const { createUser, findUserByEmail, markUserVerified, saveOTP, verifyUserOTP, approveAdvocate, getPendingAdvocates } = require('../models/userModel');
 const { generateOTP, getOTPExpiry } = require('../utils/generateOTP');
 
@@ -18,7 +19,7 @@ const transporter = nodemailer.createTransport({
 // ─── Send OTP Email ───────────────────────────────────────────────────────────
 const sendOTPEmail = async (email, otp) => {
   await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
+    from: `"LegalConnect" <${process.env.EMAIL_FROM}>`,
     to: email,
     subject: 'LegalConnect - Verify Your Email',
     html: `
@@ -59,9 +60,15 @@ const register = async (req, res) => {
     // Send OTP email
     try {
       await sendOTPEmail(email, otp);
+      console.log(`✅ OTP email sent to ${email}`);
     } catch (emailError) {
-      console.error('Email error:', emailError.message);
-      console.log(`🔐 OTP for ${email}: ${otp}`);
+      console.error('Email send failed:', emailError.message);
+      // Delete user if email fails
+      await pool.query(`DELETE FROM users WHERE email = $1`, [email]);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send OTP email. Please check your email address and try again.',
+      });
     }
 
     res.status(201).json({
@@ -92,7 +99,6 @@ const verifyOTP = async (req, res) => {
 
     await markUserVerified(email);
 
-    // Get user role
     const verifiedUser = await findUserByEmail(email);
 
     if (verifiedUser.role === 'advocate') {
@@ -130,7 +136,9 @@ const resendOTP = async (req, res) => {
 
     try {
       await sendOTPEmail(email, otp);
+      console.log(`✅ OTP resent to ${email}`);
     } catch (emailError) {
+      console.error('Resend email failed:', emailError.message);
       console.log(`🔐 OTP for ${email}: ${otp}`);
     }
 
