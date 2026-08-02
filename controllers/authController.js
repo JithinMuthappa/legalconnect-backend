@@ -94,7 +94,7 @@ const sendRegistrationStatusEmail = async (email, role, isApproved = false) => {
   const message = isAdvocate
     ? isApproved
       ? 'Your advocate account has been approved. You can now log in to LegalConnect.'
-      : 'Your email has been verified and your advocate account is now under admin review. Please try logging in after 24 hours. We will notify you as soon as your account is approved.'
+      : 'Your email has been verified and your advocate account is now under admin review. Please try logging in after 24 hours.'
     : 'Your email has been verified and your LegalConnect account has been created successfully. You can now log in and start using your account.';
   const html = `
       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 30px; background: #1A1A2E; color: white; border-radius: 10px;">
