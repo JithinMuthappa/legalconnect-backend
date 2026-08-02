@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const pool = require('../config/db');
-const { createUser, findUserByEmail, markUserVerified, saveOTP, verifyUserOTP, approveAdvocate, getPendingAdvocates } = require('../models/userModel');
+const { createUser, findUserByEmail, markUserVerified, saveOTP, verifyUserOTP, needsApprovalEmail, markApprovalEmailSent, approveAdvocate, getPendingAdvocates } = require('../models/userModel');
 const { generateOTP, getOTPExpiry } = require('../utils/generateOTP');
 
 // ─── Email Transporter ────────────────────────────────────────────────────────
@@ -135,6 +135,14 @@ const sendRegistrationStatusEmail = async (email, role, isApproved = false) => {
     subject,
     html,
   });
+};
+
+const sendAdvocateApprovalEmailIfNeeded = async (email) => {
+  if (!await needsApprovalEmail(email)) return;
+
+  await sendRegistrationStatusEmail(email, 'advocate', true);
+  await markApprovalEmailSent(email);
+  console.log(`Advocate approval email sent to ${email}`);
 };
 
 // ─── Register ─────────────────────────────────────────────────────────────────
@@ -325,6 +333,14 @@ const login = async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    // Covers advocates approved directly in the database. A temporary mail
+    // issue never blocks a valid login, and later logins will retry delivery.
+    if (user.role === 'advocate') {
+      sendAdvocateApprovalEmailIfNeeded(email).catch((emailError) => {
+        console.error('Advocate approval email retry failed:', emailError.message);
+      });
+    }
+
     res.json({
       success: true,
       message: 'Login successful!',
@@ -358,11 +374,9 @@ const approve = async (req, res) => {
 
     await approveAdvocate(email);
 
-    // Approval is successful even if the mail provider is temporarily down.
-    // The existing approval flow and its response remain unchanged.
+    // If delivery fails, the advocate's first successful login will retry it.
     try {
-      await sendRegistrationStatusEmail(email, 'advocate', true);
-      console.log(`Advocate approval email sent to ${email}`);
+      await sendAdvocateApprovalEmailIfNeeded(email);
     } catch (emailError) {
       console.error('Advocate approval email failed:', emailError.message);
     }

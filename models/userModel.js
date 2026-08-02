@@ -41,6 +41,39 @@ const markUserVerified = async (email) => {
   );
 };
 
+// This is idempotent and supports deployments that predate approval-email
+// tracking. The column prevents duplicate approval emails on later logins.
+const ensureApprovalEmailTracking = async () => {
+  await pool.query(
+    `ALTER TABLE users
+     ADD COLUMN IF NOT EXISTS approval_email_sent_at TIMESTAMPTZ`
+  );
+};
+
+const needsApprovalEmail = async (email) => {
+  await ensureApprovalEmailTracking();
+  const result = await pool.query(
+    `SELECT email FROM users
+     WHERE email = $1
+       AND role = 'advocate'
+       AND is_verified = TRUE
+       AND is_approved = TRUE
+       AND approval_email_sent_at IS NULL`,
+    [email]
+  );
+  return result.rows.length > 0;
+};
+
+const markApprovalEmailSent = async (email) => {
+  await ensureApprovalEmailTracking();
+  await pool.query(
+    `UPDATE users
+     SET approval_email_sent_at = NOW()
+     WHERE email = $1 AND approval_email_sent_at IS NULL`,
+    [email]
+  );
+};
+
 const approveAdvocate = async (email) => {
   await pool.query(
     `UPDATE users SET is_approved = TRUE WHERE email = $1`,
@@ -72,6 +105,8 @@ module.exports = {
   saveOTP,
   verifyUserOTP,
   markUserVerified,
+  needsApprovalEmail,
+  markApprovalEmailSent,
   approveAdvocate,
   getPendingAdvocates,
 };
