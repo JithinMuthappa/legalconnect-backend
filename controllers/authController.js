@@ -73,6 +73,70 @@ const sendOTPEmail = async (email, otp) => {
   });
 };
 
+// Sent when registration status changes. It reuses the configured email
+// provider so client and advocate emails follow the same setup as OTP emails.
+const sendRegistrationStatusEmail = async (email, role, isApproved = false) => {
+  if (!process.env.EMAIL_FROM) {
+    throw new Error('Email service is not configured');
+  }
+
+  const isAdvocate = role === 'advocate';
+  const subject = isAdvocate
+    ? isApproved
+      ? 'LegalConnect - Your Account Has Been Approved'
+      : 'LegalConnect - Your Account Is Under Review'
+    : 'LegalConnect - Account Created Successfully';
+  const heading = isAdvocate
+    ? isApproved
+      ? 'Your Account Has Been Approved'
+      : 'Your Account Is Under Review'
+    : 'Account Created Successfully';
+  const message = isAdvocate
+    ? isApproved
+      ? 'Your advocate account has been approved. You can now log in to LegalConnect.'
+      : 'Your email has been verified and your advocate account is now under admin review. We will notify you as soon as it is approved.'
+    : 'Your email has been verified and your LegalConnect account has been created successfully. You can now log in and start using your account.';
+  const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 30px; background: #1A1A2E; color: white; border-radius: 10px;">
+        <h1 style="color: #D4AF37; text-align: center;">LegalConnect</h1>
+        <h2 style="color: white;">${heading}</h2>
+        <p style="color: #B0B0C0;">${message}</p>
+      </div>
+    `;
+
+  if (process.env.BREVO_API_KEY) {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': process.env.BREVO_API_KEY,
+      },
+      body: JSON.stringify({
+        sender: { name: 'LegalConnect', email: process.env.EMAIL_FROM },
+        to: [{ email }],
+        subject,
+        htmlContent: html,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Brevo API request failed (${response.status}): ${await response.text()}`);
+    }
+    return;
+  }
+
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error('Email service is not configured');
+  }
+
+  await transporter.sendMail({
+    from: `"LegalConnect" <${process.env.EMAIL_FROM}>`,
+    to: email,
+    subject,
+    html,
+  });
+};
+
 // ─── Register ─────────────────────────────────────────────────────────────────
 const register = async (req, res) => {
   try {
@@ -158,6 +222,15 @@ const verifyOTP = async (req, res) => {
     await markUserVerified(email);
 
     const verifiedUser = await findUserByEmail(email);
+
+    // Confirmation delivery must not alter an already successful verification.
+    // This keeps the current client and advocate flows unchanged if mail is down.
+    try {
+      await sendRegistrationStatusEmail(email, verifiedUser.role);
+      console.log(`Registration-status email sent to ${email}`);
+    } catch (emailError) {
+      console.error('Account-created email failed:', emailError.message);
+    }
 
     if (verifiedUser.role === 'advocate') {
       return res.json({
@@ -284,6 +357,16 @@ const approve = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email is required' });
 
     await approveAdvocate(email);
+
+    // Approval is successful even if the mail provider is temporarily down.
+    // The existing approval flow and its response remain unchanged.
+    try {
+      await sendRegistrationStatusEmail(email, 'advocate', true);
+      console.log(`Advocate approval email sent to ${email}`);
+    } catch (emailError) {
+      console.error('Advocate approval email failed:', emailError.message);
+    }
+
     res.json({ success: true, message: `Advocate ${email} approved!` });
   } catch (error) {
     console.error('Approve error:', error.message);
