@@ -36,20 +36,22 @@ const getInbox = async (userId) => {
      receiver.email as receiver_email,
      sp.full_name as sender_name,
      sp.profile_image as sender_image,
+     sp.phone as sender_phone,
      rp.full_name as receiver_name,
-     rp.profile_image as receiver_image
+     rp.profile_image as receiver_image,
+     rp.phone as receiver_phone
      FROM messages
      JOIN users sender ON messages.sender_id = sender.id
      JOIN users receiver ON messages.receiver_id = receiver.id
      LEFT JOIN (
-       SELECT user_id, full_name, profile_image FROM clients
+       SELECT user_id, full_name, profile_image, phone FROM clients
        UNION
-       SELECT user_id, full_name, profile_image FROM advocates
+       SELECT user_id, full_name, profile_image, phone FROM advocates
      ) sp ON sp.user_id = messages.sender_id
      LEFT JOIN (
-       SELECT user_id, full_name, profile_image FROM clients
+       SELECT user_id, full_name, profile_image, phone FROM clients
        UNION
-       SELECT user_id, full_name, profile_image FROM advocates
+       SELECT user_id, full_name, profile_image, phone FROM advocates
      ) rp ON rp.user_id = messages.receiver_id
      WHERE (sender_id = $1 AND deleted_by_sender = FALSE)
      OR (receiver_id = $1 AND deleted_by_receiver = FALSE)
