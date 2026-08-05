@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const pool = require('../config/db');
-const { createUser, findUserByEmail, markUserVerified, saveOTP, verifyUserOTP, needsApprovalEmail, markApprovalEmailSent, approveAdvocate, getPendingAdvocates } = require('../models/userModel');
+const { createUser, findUserByEmail, markUserVerified, saveOTP, verifyUserOTP, needsApprovalEmail, markApprovalEmailSent, approveAdvocate, updateLoginBarCouncilNumber, getPendingAdvocates } = require('../models/userModel');
 const { generateOTP, getOTPExpiry } = require('../utils/generateOTP');
 
 // ─── Email Transporter ────────────────────────────────────────────────────────
@@ -315,6 +315,14 @@ const login = async (req, res) => {
         email: email,
       });
 
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch)
+      return res.status(400).json({ success: false, message: 'Invalid credentials' });
+
+    if (user.role === 'advocate' && req.body.bar_council_number) {
+      await updateLoginBarCouncilNumber(user.id, req.body.bar_council_number);
+    }
+
     if (user.role === 'advocate' && !user.is_approved) {
       return res.status(403).json({
         success: false,
@@ -322,10 +330,6 @@ const login = async (req, res) => {
         isPending: true,
       });
     }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
-      return res.status(400).json({ success: false, message: 'Invalid credentials' });
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },

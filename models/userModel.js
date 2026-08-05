@@ -86,9 +86,28 @@ const approveAdvocate = async (email) => {
   );
 };
 
+const ensureLoginBarCouncilColumn = async () => {
+  await pool.query(
+    `ALTER TABLE users
+     ADD COLUMN IF NOT EXISTS login_bar_council_number TEXT`
+  );
+};
+
+const updateLoginBarCouncilNumber = async (userId, barCouncilNumber) => {
+  await ensureLoginBarCouncilColumn();
+  await pool.query(
+    `UPDATE users
+     SET login_bar_council_number = $1
+     WHERE id = $2`,
+    [barCouncilNumber, userId]
+  );
+};
+
 const getPendingAdvocates = async () => {
+  await ensureLoginBarCouncilColumn();
   const result = await pool.query(
     `SELECT users.id, users.email, users.created_at,
+     users.login_bar_council_number,
      advocates.full_name, advocates.bar_council_number,
      advocates.specialization, advocates.city, advocates.status
      FROM users
@@ -108,5 +127,6 @@ module.exports = {
   needsApprovalEmail,
   markApprovalEmailSent,
   approveAdvocate,
+  updateLoginBarCouncilNumber,
   getPendingAdvocates,
 };
