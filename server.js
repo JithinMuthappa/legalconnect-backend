@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const pool = require('./config/db');
 
 dotenv.config();
 
@@ -17,6 +18,17 @@ app.use(express.urlencoded({ extended: true }));
 
 // Static folder for uploads
 app.use('/uploads', express.static('uploads'));
+
+// Ensure login Bar Council column exists before routes are mounted
+(async () => {
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS login_bar_council_number TEXT`);
+    console.log('✅ Ensured users.login_bar_council_number exists');
+  } catch (error) {
+    console.error('❌ Failed to create users.login_bar_council_number column:', error.message);
+    process.exit(1);
+  }
+})();
 
 // Routes
 app.use('/api/auth',         require('./routes/authRoutes'));
