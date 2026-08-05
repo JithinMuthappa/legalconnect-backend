@@ -103,6 +103,13 @@ const updateLoginBarCouncilNumber = async (userId, barCouncilNumber) => {
   );
 };
 
+const updatePasswordByEmail = async (email, hashedPassword) => {
+  await pool.query(
+    `UPDATE users SET password = $1 WHERE email = $2`,
+    [hashedPassword, email]
+  );
+};
+
 const getPendingAdvocates = async () => {
   await ensureLoginBarCouncilColumn();
   const result = await pool.query(
@@ -128,5 +135,6 @@ module.exports = {
   markApprovalEmailSent,
   approveAdvocate,
   updateLoginBarCouncilNumber,
+  updatePasswordByEmail,
   getPendingAdvocates,
 };

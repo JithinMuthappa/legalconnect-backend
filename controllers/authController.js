@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const pool = require('../config/db');
-const { createUser, findUserByEmail, markUserVerified, saveOTP, verifyUserOTP, needsApprovalEmail, markApprovalEmailSent, approveAdvocate, updateLoginBarCouncilNumber, getPendingAdvocates } = require('../models/userModel');
+const { createUser, findUserByEmail, markUserVerified, saveOTP, verifyUserOTP, needsApprovalEmail, markApprovalEmailSent, approveAdvocate, updateLoginBarCouncilNumber, updatePasswordByEmail, getPendingAdvocates } = require('../models/userModel');
 const { generateOTP, getOTPExpiry } = require('../utils/generateOTP');
 
 // ─── Email Transporter ────────────────────────────────────────────────────────
@@ -101,6 +101,57 @@ const sendRegistrationStatusEmail = async (email, role, isApproved = false) => {
         <h1 style="color: #D4AF37; text-align: center;">LegalConnect</h1>
         <h2 style="color: white;">${heading}</h2>
         <p style="color: #B0B0C0;">${message}</p>
+      </div>
+    `;
+
+  if (process.env.BREVO_API_KEY) {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': process.env.BREVO_API_KEY,
+      },
+      body: JSON.stringify({
+        sender: { name: 'LegalConnect', email: process.env.EMAIL_FROM },
+        to: [{ email }],
+        subject,
+        htmlContent: html,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Brevo API request failed (${response.status}): ${await response.text()}`);
+    }
+    return;
+  }
+
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error('Email service is not configured');
+  }
+
+  await transporter.sendMail({
+    from: `"LegalConnect" <${process.env.EMAIL_FROM}>`,
+    to: email,
+    subject,
+    html,
+  });
+};
+
+const sendPasswordResetEmail = async (email, otp) => {
+  if (!process.env.EMAIL_FROM) {
+    throw new Error('Email service is not configured');
+  }
+
+  const subject = 'LegalConnect - Password Reset OTP';
+  const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 30px; background: #1A1A2E; color: white; border-radius: 10px;">
+        <h1 style="color: #D4AF37; text-align: center;">LegalConnect</h1>
+        <h2 style="color: white;">Password Reset Request</h2>
+        <p style="color: #B0B0C0;">Use the OTP below to reset your password. It expires in 10 minutes.</p>
+        <div style="background: #252540; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+          <h1 style="color: #D4AF37; letter-spacing: 10px; font-size: 36px;">${otp}</h1>
+        </div>
+        <p style="color: #B0B0C0;">If you did not request a password reset, please ignore this email.</p>
       </div>
     `;
 
@@ -295,6 +346,75 @@ const resendOTP = async (req, res) => {
   }
 };
 
+// ─── Forgot Password ───────────────────────────────────────────────────────────
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const user = await findUserByEmail(email);
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Email not found' });
+    }
+
+    if (!user.is_verified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please verify your account before resetting your password.',
+      });
+    }
+
+    const otp = generateOTP();
+    const expiresAt = getOTPExpiry();
+
+    try {
+      await sendPasswordResetEmail(email, otp);
+      await saveOTP(email, otp, expiresAt);
+      console.log(`✅ Password reset OTP sent to ${email}`);
+    } catch (emailError) {
+      console.error('Password reset email failed:', emailError.message);
+      return res.status(502).json({
+        success: false,
+        message: 'Unable to send password reset email. Please try again later.',
+      });
+    }
+
+    res.json({ success: true, message: 'OTP sent to your email.' });
+  } catch (error) {
+    console.error('Forgot password error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to process password reset request' });
+  }
+};
+
+// ─── Reset Password ────────────────────────────────────────────────────────────
+const resetPassword = async (req, res) => {
+  try {
+    const { email, otp, password } = req.body;
+    if (!email || !otp || !password) {
+      return res.status(400).json({ success: false, message: 'Email, OTP, and new password are required' });
+    }
+
+    const user = await verifyUserOTP(email, otp);
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await updatePasswordByEmail(email, hashedPassword);
+    await pool.query(
+      `UPDATE users SET otp = NULL, otp_expires_at = NULL WHERE email = $1`,
+      [email]
+    );
+
+    res.json({ success: true, message: 'Password has been reset successfully. You can now log in with your new password.' });
+  } catch (error) {
+    console.error('Reset password error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to reset password' });
+  }
+};
+
 // ─── Login ────────────────────────────────────────────────────────────────────
 const login = async (req, res) => {
   try {
@@ -392,4 +512,4 @@ const approve = async (req, res) => {
   }
 };
 
-module.exports = { register, verifyOTP, resendOTP, login, getPending, approve };
+module.exports = { register, verifyOTP, resendOTP, forgotPassword, resetPassword, login, getPending, approve };
