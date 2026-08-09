@@ -1,8 +1,8 @@
 const https = require('https');
 const GNEWS_API_BASE = 'https://gnews.io/api/v4/search';
 const LEGAL_QUERY = 'India law OR legal OR court OR judiciary OR IPC OR CrPC OR Supreme Court OR legal update OR legal rights';
-const FREE_GNEWS_DEMO_TOKEN = 'demo';
-const NEWS_API_KEY = process.env.NEWS_API_KEY || process.env.GNEWS_API_KEY || FREE_GNEWS_DEMO_TOKEN;
+const DEFAULT_GNEWS_API_KEY = '6438717dcc4d2a66305bafef07bed783';
+const NEWS_API_KEY = process.env.NEWS_API_KEY || process.env.GNEWS_API_KEY || DEFAULT_GNEWS_API_KEY;
 
 const fetchJson = (url) => {
   return new Promise((resolve, reject) => {
