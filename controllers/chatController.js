@@ -7,48 +7,40 @@ const groq = new Groq({
 
 const LEGAL_SYSTEM_PROMPT = `You are LegalConnect AI, a professional legal assistant for Indian law.
 
-Always respond in this EXACT structured format — no paragraphs, no exceptions:
+When user says hi/hello/greetings or asks non-legal questions, respond normally and friendly.
 
-📋 Article/Section: [Relevant IPC/CrPC/Constitution section]
-⚖️ Legal Standing: [Strong / Moderate / Weak]
-📝 Description: [Max 3 lines explaining the legal situation clearly]
-✅ Recommended Steps:
-1. [First action to take]
-2. [Second action to take]
-3. [Third action to take]
-⚠️ Important: [One key legal warning or reminder]
+When user describes a LEGAL PROBLEM, you MUST respond ONLY in this exact JSON format and nothing else:
 
-Additional rules:
-- Never write long paragraphs
-- Always cite specific Indian law sections
-- Keep each point brief and clear
-- Only answer legal questions related to Indian law
-- If non-legal question, politely redirect
-- Always recommend consulting a registered advocate
+{
+  "type": "legal",
+  "case_type": "Type of case (e.g. Defamation, Theft, Divorce)",
+  "nature": "Civil or Criminal",
+  "law": "Applicable law name",
+  "sections": "Relevant IPC/CrPC/Act section numbers and names",
+  "where_to_file": "Which court to approach",
+  "steps": "Step by step action to take",
+  "fine_range": "Minimum fine – Maximum fine or Not Applicable",
+  "lawyer_type": "Type of lawyer needed (Criminal/Family/Civil/Consumer/Cyber/Labour/Property/Tax)"
+}
 
-Indian Law References to use:
-1. IPC Section 302 - Murder cases - Suggest Criminal Lawyer
-2. IPC Section 354 - Assault on women - Suggest Criminal/Women Rights Lawyer  
-3. IPC Section 420 - Cheating/Fraud - Suggest Civil/Criminal Lawyer
-4. IPC Section 498A - Domestic Violence - Suggest Family Lawyer
-5. CrPC Section 125 - Maintenance cases - Suggest Family Lawyer
-6. Hindu Marriage Act 1955 - Divorce cases - Suggest Family Lawyer
-7. Consumer Protection Act 2019 - Consumer disputes - Suggest Consumer Lawyer
-8. IT Act Section 66 - Cyber crimes - Suggest Cyber Lawyer
-9. RTI Act 2005 - Right to Information - Suggest Constitutional Lawyer
-10. Motor Vehicles Act Section 166 - Accident claims - Suggest Insurance/Civil Lawyer`;
+For non-legal queries respond in this JSON format:
+{
+  "type": "general",
+  "message": "Your friendly response here"
+}
 
-// ─── Get Advocates from DB by Specialization ──────────────────────────────────
-const getAdvocatesBySpecialization = async (specialization) => {
+IMPORTANT: Always return valid JSON only. No extra text outside JSON.`;
+
+const getAdvocatesBySpecialization = async (lawyerType) => {
   try {
-    const keywords = specialization.toLowerCase();
     const result = await pool.query(
       `SELECT full_name, phone, city, specialization, experience_years
        FROM advocates
        WHERE LOWER(specialization) ILIKE $1
        AND status = 'approved'
+       ORDER BY experience_years DESC
        LIMIT 3`,
-      [`%${keywords}%`]
+      [`%${lawyerType.toLowerCase()}%`]
     );
     return result.rows;
   } catch (error) {
@@ -56,21 +48,6 @@ const getAdvocatesBySpecialization = async (specialization) => {
   }
 };
 
-// ─── Detect lawyer type from message ──────────────────────────────────────────
-const detectLawyerType = (message) => {
-  const msg = message.toLowerCase();
-  if (msg.includes('murder') || msg.includes('criminal') || msg.includes('arrest') || msg.includes('theft') || msg.includes('robbery')) return 'Criminal';
-  if (msg.includes('divorce') || msg.includes('marriage') || msg.includes('custody') || msg.includes('maintenance') || msg.includes('domestic')) return 'Family';
-  if (msg.includes('property') || msg.includes('land') || msg.includes('rent') || msg.includes('real estate')) return 'Property';
-  if (msg.includes('consumer') || msg.includes('product') || msg.includes('refund') || msg.includes('fraud')) return 'Consumer';
-  if (msg.includes('cyber') || msg.includes('online') || msg.includes('hacking') || msg.includes('internet')) return 'Cyber';
-  if (msg.includes('labour') || msg.includes('employment') || msg.includes('salary') || msg.includes('workplace')) return 'Labour';
-  if (msg.includes('tax') || msg.includes('income tax') || msg.includes('gst')) return 'Tax';
-  if (msg.includes('accident') || msg.includes('insurance') || msg.includes('vehicle')) return 'Civil';
-  return 'General';
-};
-
-// ─── Chat with AI ─────────────────────────────────────────────────────────────
 const chat = async (req, res) => {
   try {
     const { message, history } = req.body;
@@ -78,22 +55,6 @@ const chat = async (req, res) => {
     if (!message)
       return res.status(400).json({ success: false, message: 'Message is required' });
 
-    // Detect lawyer type and fetch from DB
-    const lawyerType = detectLawyerType(message);
-    const advocates = await getAdvocatesBySpecialization(lawyerType);
-
-    // Build advocate suggestion string
-    let advocateSuggestion = '';
-    if (advocates.length > 0) {
-      advocateSuggestion = '\n\nRegistered Advocates available on LegalConnect:\n';
-      advocates.forEach((adv, i) => {
-        advocateSuggestion += `${i + 1}. ${adv.full_name} | ${adv.specialization} | 📞 ${adv.phone || 'N/A'} | 📍 ${adv.city} | ${adv.experience_years} yrs exp\n`;
-      });
-    } else {
-      advocateSuggestion = `\n\nNo ${lawyerType} lawyers currently registered on LegalConnect. Please search manually.`;
-    }
-
-    // Build messages
     const messages = [
       { role: 'system', content: LEGAL_SYSTEM_PROMPT },
     ];
@@ -104,25 +65,40 @@ const chat = async (req, res) => {
       });
     }
 
-    messages.push({ 
-      role: 'user', 
-      content: `${message}\n\n[After your structured response, append this advocate info exactly as provided: ${advocateSuggestion}]` 
-    });
+    messages.push({ role: 'user', content: message });
 
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages,
       max_tokens: 1024,
-      temperature: 0.7,
+      temperature: 0.3,
     });
 
-    const reply = completion.choices[0].message.content;
+    const rawReply = completion.choices[0].message.content;
+
+    let parsed;
+    try {
+      const cleaned = rawReply.replace(/```json|```/g, '').trim();
+      parsed = JSON.parse(cleaned);
+    } catch (e) {
+      return res.json({
+        success: true,
+        reply: rawReply,
+        type: 'general',
+      });
+    }
+
+    let advocates = [];
+    if (parsed.type === 'legal' && parsed.lawyer_type) {
+      advocates = await getAdvocatesBySpecialization(parsed.lawyer_type);
+    }
 
     res.json({
       success: true,
-      reply,
-      lawyerType,
-      advocatesFound: advocates.length,
+      type: parsed.type,
+      data: parsed,
+      advocates,
+      reply: parsed.type === 'general' ? parsed.message : null,
     });
 
   } catch (error) {
@@ -131,7 +107,6 @@ const chat = async (req, res) => {
   }
 };
 
-// ─── Get Legal Topics ─────────────────────────────────────────────────────────
 const getLegalTopics = async (req, res) => {
   res.json({
     success: true,
