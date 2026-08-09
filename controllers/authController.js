@@ -199,16 +199,23 @@ const sendAdvocateApprovalEmailIfNeeded = async (email) => {
 // ─── Register ─────────────────────────────────────────────────────────────────
 const register = async (req, res) => {
   try {
-    const { email, password, role } = req.body;
+    const { email, password, role, bar_council_number } = req.body;
 
     if (!email || !password || !role)
       return res.status(400).json({ success: false, message: 'All fields are required' });
+
+    if (role === 'advocate' && !bar_council_number)
+      return res.status(400).json({ success: false, message: 'Bar Council Number is required for advocates' });
 
     const existingUser = await findUserByEmail(email);
     if (existingUser && existingUser.is_verified)
       return res.status(400).json({ success: false, message: 'Email already registered' });
 
     if (existingUser) {
+      if (existingUser.role === 'advocate' && bar_council_number) {
+        await updateLoginBarCouncilNumber(existingUser.id, bar_council_number);
+      }
+
       const otp = generateOTP();
       const expiresAt = getOTPExpiry();
 
@@ -232,6 +239,10 @@ const register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await createUser(email, hashedPassword, role);
+
+    if (role === 'advocate') {
+      await updateLoginBarCouncilNumber(user.id, bar_council_number);
+    }
 
     // Generate OTP
     const otp = generateOTP();
