@@ -1,7 +1,8 @@
 const https = require('https');
-const NEWS_API_KEY = process.env.NEWS_API_KEY || process.env.NEWSAPI_API_KEY;
-const NEWS_API_BASE = 'https://newsapi.org/v2/everything';
+const GNEWS_API_BASE = 'https://gnews.io/api/v4/search';
 const LEGAL_QUERY = 'India law OR legal OR court OR judiciary OR IPC OR CrPC OR Supreme Court OR legal update OR legal rights';
+const FREE_GNEWS_DEMO_TOKEN = 'demo';
+const NEWS_API_KEY = process.env.NEWS_API_KEY || process.env.GNEWS_API_KEY || FREE_GNEWS_DEMO_TOKEN;
 
 const fetchJson = (url) => {
   return new Promise((resolve, reject) => {
@@ -28,20 +29,13 @@ const fetchJson = (url) => {
 
 const getLegalNews = async (req, res) => {
   try {
-    if (!NEWS_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        message:
-          'NEWS_API_KEY is not configured. Please add it to your environment variables.',
-      });
-    }
-
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
-    const url = `${NEWS_API_BASE}?q=${encodeURIComponent(LEGAL_QUERY)}&language=en&sortBy=publishedAt&pageSize=${limit}&apiKey=${NEWS_API_KEY}`;
+    const query = req.query.q || LEGAL_QUERY;
+    const url = `${GNEWS_API_BASE}?q=${encodeURIComponent(query)}&lang=en&country=in&max=${limit}&token=${NEWS_API_KEY}`;
 
     const { status, body } = await fetchJson(url);
     if (status !== 200) {
-      console.error('News API error:', status, body);
+      console.error('GNews API error:', status, body);
       return res.status(502).json({
         success: false,
         message: 'Failed to fetch legal news from external provider.',
@@ -52,11 +46,11 @@ const getLegalNews = async (req, res) => {
       title: article.title,
       description: article.description,
       url: article.url,
-      imageUrl: article.urlToImage,
+      imageUrl: article.image || null,
       publishedAt: article.publishedAt,
       source: article.source && article.source.name ? article.source.name : 'Unknown',
-      content: article.content,
-      videoUrl: article.videoUrl || null,
+      content: article.content || article.description || '',
+      videoUrl: article.video?.url || null,
     }));
 
     res.json({ success: true, articles });
