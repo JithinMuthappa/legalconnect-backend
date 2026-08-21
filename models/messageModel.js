@@ -113,16 +113,29 @@ const deleteMessage = async (messageId, userId, deleteForEveryone) => {
     [messageId]
   );
 
-  if (msg.rows.length === 0) return false;
+  if (msg.rows.length === 0) {
+    throw new Error('Message not found');
+  }
 
   const message = msg.rows[0];
 
-  if (deleteForEveryone && message.sender_id === userId) {
+  if (message.sender_id !== userId && message.receiver_id !== userId) {
+    throw new Error('Not authorized to delete this message');
+  }
+
+  if (deleteForEveryone && message.sender_id !== userId) {
+    throw new Error('Only the sender can delete a message for everyone');
+  }
+
+  if (deleteForEveryone) {
     // Delete for everyone — mark as deleted and update content
     await pool.query(
       `UPDATE messages
        SET is_deleted_for_everyone = TRUE,
-           content = 'This message was deleted'
+           content = 'This message was deleted',
+           attachment_data = NULL,
+           attachment_name = NULL,
+           attachment_type = NULL
        WHERE id = $1`,
       [messageId]
     );
