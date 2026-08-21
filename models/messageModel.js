@@ -1,10 +1,18 @@
 const pool = require('../config/db');
 
-const sendMessage = async (senderId, receiverId, content) => {
+const sendMessage = async (
+  senderId,
+  receiverId,
+  content,
+  attachmentData = null,
+  attachmentName = null,
+  attachmentType = null,
+) => {
   const result = await pool.query(
-    `INSERT INTO messages (sender_id, receiver_id, content)
-     VALUES ($1, $2, $3) RETURNING *`,
-    [senderId, receiverId, content]
+    `INSERT INTO messages
+       (sender_id, receiver_id, content, attachment_data, attachment_name, attachment_type)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [senderId, receiverId, content, attachmentData, attachmentName, attachmentType]
   );
   return result.rows[0];
 };

@@ -13,7 +13,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Static folder for uploads
@@ -23,6 +23,9 @@ app.use('/uploads', express.static('uploads'));
 (async () => {
   try {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS login_bar_council_number TEXT`);
+    await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_data TEXT`);
+    await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT`);
+    await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_type TEXT`);
     console.log('✅ Ensured users.login_bar_council_number exists');
   } catch (error) {
     console.error('❌ Failed to create users.login_bar_council_number column:', error.message);

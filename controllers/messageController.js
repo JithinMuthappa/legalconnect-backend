@@ -10,16 +10,29 @@ const {
 
 const send = async (req, res) => {
   try {
-    const { receiver_id, content } = req.body;
+    const {
+      receiver_id,
+      content = '',
+      attachment_data,
+      attachment_name,
+      attachment_type,
+    } = req.body;
     const sender_id = req.user.id;
 
-    if (!receiver_id || !content)
+    if (!receiver_id || (!content.trim() && !attachment_data))
       return res.status(400).json({
         success: false,
-        message: 'Receiver and content are required',
+        message: 'Receiver and message content or attachment are required',
       });
 
-    const message = await sendMessage(sender_id, receiver_id, content);
+    const message = await sendMessage(
+      sender_id,
+      receiver_id,
+      content.trim(),
+      attachment_data,
+      attachment_name,
+      attachment_type,
+    );
     res.status(201).json({ success: true, message });
 
   } catch (error) {
