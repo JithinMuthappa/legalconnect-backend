@@ -25,8 +25,9 @@ const getConversation = async (userId1, userId2) => {
      FROM messages
      JOIN users sender ON messages.sender_id = sender.id
      JOIN users receiver ON messages.receiver_id = receiver.id
-     WHERE (sender_id = $1 AND receiver_id = $2 AND deleted_by_sender = FALSE)
-     OR (sender_id = $2 AND receiver_id = $1 AND deleted_by_receiver = FALSE)
+     WHERE ((sender_id = $1 AND receiver_id = $2 AND deleted_by_sender = FALSE)
+     OR (sender_id = $2 AND receiver_id = $1 AND deleted_by_receiver = FALSE))
+     AND is_deleted_for_everyone = FALSE
      ORDER BY created_at ASC`,
     [userId1, userId2]
   );
@@ -61,8 +62,9 @@ const getInbox = async (userId) => {
        UNION
        SELECT user_id, full_name, profile_image, phone FROM advocates
      ) rp ON rp.user_id = messages.receiver_id
-     WHERE (sender_id = $1 AND deleted_by_sender = FALSE)
-     OR (receiver_id = $1 AND deleted_by_receiver = FALSE)
+     WHERE ((sender_id = $1 AND deleted_by_sender = FALSE)
+     OR (receiver_id = $1 AND deleted_by_receiver = FALSE))
+     AND is_deleted_for_everyone = FALSE
      ORDER BY
        LEAST(sender_id, receiver_id),
        GREATEST(sender_id, receiver_id),
