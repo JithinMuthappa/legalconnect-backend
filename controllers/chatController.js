@@ -48,6 +48,20 @@ const getAdvocatesBySpecialization = async (lawyerType) => {
   }
 };
 
+const getFallbackReply = (message = '') => {
+  const query = message.toLowerCase();
+  if (query.includes('divorce') || query.includes('marriage') || query.includes('maintenance')) {
+    return 'For a family-law matter, keep relevant documents such as marriage records, financial details, and any communications. You may seek advice from a family-law advocate before filing. LegalConnect can help you find one.';
+  }
+  if (query.includes('property') || query.includes('land') || query.includes('rent')) {
+    return 'For a property matter, preserve sale deeds, agreements, payment records, and relevant communications. A property advocate can review the documents and explain the appropriate civil remedy.';
+  }
+  if (query.includes('police') || query.includes('theft') || query.includes('crime') || query.includes('fir')) {
+    return 'If this concerns an alleged crime, preserve evidence and note dates, witnesses, and communications. You can consult a criminal-law advocate about filing a complaint or responding to police action.';
+  }
+  return 'I can help you understand common legal next steps under Indian law. Please describe your issue, the location, and any important dates or documents. For urgent matters, please contact a qualified advocate directly.';
+};
+
 const chat = async (req, res) => {
   try {
     const { message, history } = req.body;
@@ -103,7 +117,12 @@ const chat = async (req, res) => {
 
   } catch (error) {
     console.error('Chat error:', error.message);
-    res.status(500).json({ success: false, message: 'AI chat failed' });
+    res.json({
+      success: true,
+      type: 'general',
+      reply: getFallbackReply(req.body?.message),
+      fallback: true,
+    });
   }
 };
 
