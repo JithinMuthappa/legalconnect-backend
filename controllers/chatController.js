@@ -62,6 +62,25 @@ const getFallbackReply = (message = '') => {
   return 'I can help you understand common legal next steps under Indian law. Please describe your issue, the location, and any important dates or documents. For urgent matters, please contact a qualified advocate directly.';
 };
 
+const getFallbackLegalAnalysis = (message = '') => {
+  const query = message.toLowerCase();
+  if (query.includes('harm') || query.includes('hit') || query.includes('assault') || query.includes('neighbour') || query.includes('threat')) {
+    return {
+      type: 'legal',
+      case_type: 'Assault / Criminal Intimidation',
+      nature: 'Criminal',
+      law: 'Bharatiya Nyaya Sanhita, 2023',
+      sections: 'Relevant provisions may include voluntarily causing hurt and criminal intimidation (formerly IPC Sections 323 and 506), depending on the facts.',
+      where_to_file: 'Nearest police station or the local Magistrate court, as advised by an advocate.',
+      steps: 'Preserve medical records, photos, CCTV footage, messages, and witness details. Submit a written complaint and obtain an acknowledgement or FIR number.',
+      fine_range: 'Depends on the offence proved and the facts of the case.',
+      compensation: 'An advocate can advise on compensation for medical expenses, injury, or other proven loss.',
+      lawyer_type: 'Criminal Lawyer',
+    };
+  }
+  return null;
+};
+
 const chat = async (req, res) => {
   try {
     const { message, history } = req.body;
@@ -117,6 +136,16 @@ const chat = async (req, res) => {
 
   } catch (error) {
     console.error('Chat error:', error.message);
+    const legalFallback = getFallbackLegalAnalysis(req.body?.message);
+    if (legalFallback) {
+      return res.json({
+        success: true,
+        type: 'legal',
+        data: legalFallback,
+        advocates: await getAdvocatesBySpecialization(legalFallback.lawyer_type),
+        fallback: true,
+      });
+    }
     res.json({
       success: true,
       type: 'general',
