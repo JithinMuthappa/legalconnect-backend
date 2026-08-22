@@ -43,6 +43,7 @@ app.use('/api/client',       require('./routes/clientDashboardRoutes'));
 app.use('/api/upload',       require('./routes/uploadRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
 app.use('/api/news', require('./routes/newsRoutes'));
+app.use('/api/calendar', require('./routes/calendarRoutes'));
 
 // Health Check
 app.get('/', (req, res) => {
