@@ -43,25 +43,19 @@ const getInbox = async (userId) => {
      messages.*,
      sender.email as sender_email,
      receiver.email as receiver_email,
-     sp.full_name as sender_name,
-     sp.profile_image as sender_image,
-     sp.phone as sender_phone,
-     rp.full_name as receiver_name,
-     rp.profile_image as receiver_image,
-     rp.phone as receiver_phone
+     COALESCE(sender_client.full_name, sender_advocate.full_name) as sender_name,
+     COALESCE(sender_client.profile_image, sender_advocate.profile_image) as sender_image,
+     COALESCE(sender_client.phone, sender_advocate.phone) as sender_phone,
+     COALESCE(receiver_client.full_name, receiver_advocate.full_name) as receiver_name,
+     COALESCE(receiver_client.profile_image, receiver_advocate.profile_image) as receiver_image,
+     COALESCE(receiver_client.phone, receiver_advocate.phone) as receiver_phone
      FROM messages
      JOIN users sender ON messages.sender_id = sender.id
      JOIN users receiver ON messages.receiver_id = receiver.id
-     LEFT JOIN (
-       SELECT user_id, full_name, profile_image, phone FROM clients
-       UNION
-       SELECT user_id, full_name, profile_image, phone FROM advocates
-     ) sp ON sp.user_id = messages.sender_id
-     LEFT JOIN (
-       SELECT user_id, full_name, profile_image, phone FROM clients
-       UNION
-       SELECT user_id, full_name, profile_image, phone FROM advocates
-     ) rp ON rp.user_id = messages.receiver_id
+     LEFT JOIN clients sender_client ON sender_client.user_id = messages.sender_id
+     LEFT JOIN advocates sender_advocate ON sender_advocate.user_id = messages.sender_id
+     LEFT JOIN clients receiver_client ON receiver_client.user_id = messages.receiver_id
+     LEFT JOIN advocates receiver_advocate ON receiver_advocate.user_id = messages.receiver_id
      WHERE ((sender_id = $1 AND deleted_by_sender = FALSE)
      OR (receiver_id = $1 AND deleted_by_receiver = FALSE))
      AND is_deleted_for_everyone = FALSE
