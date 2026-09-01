@@ -101,7 +101,7 @@ const chat = async (req, res) => {
     messages.push({ role: 'user', content: message });
 
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'qwen/qwen3.8-27b',
       messages,
       max_tokens: 1024,
       temperature: 0.3,
